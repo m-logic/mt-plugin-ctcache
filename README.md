@@ -1,6 +1,6 @@
 # CTCache plugin
 
-This plugin caches some internal data of Content Type that is repeated referrenced.
+This plugin caches some internal data of Movable Type that is repeated referrenced.
 
 ## Requirements
 
