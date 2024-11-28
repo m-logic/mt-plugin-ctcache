@@ -1,0 +1,73 @@
+    <!-- CTCache modified -->
+    <legend class="h3"><__trans phrase="Content Type Privileges">あどみん２０２３</legend>
+    <mt:loop name="content_type_perm_groups">
+        <mt:setvar name="manage_content_data" value="">
+        <mt:setvar name="manage_content_field" value="">
+        <mt:loop name="ct_permissions">
+        <mt:if name="content_type_unique_id" eq="$ct_perm_group_unique_id">
+
+            <mt:if name="type" eq="manage">
+                <mt:setvarblock name="all">
+                <div class="form-check col-auto">
+                        <input id="<mt:var name="id">" type="checkbox" onclick="togglePerms(this, '<mt:var name="children" replace=":","\\:">')" class="<mt:var name="id"> cb form-check-input" name="permission" value="<mt:var name="id">"<mt:if name="can_do">  checked="checked"</mt:if>>
+                        <label class="form-check-label" for="<mt:var name="id" escape="html">"><span class="h4"><mt:var name="label" escape="html"></span></label>
+                </div>
+                </mt:setvarblock>
+
+            <mt:elseif eq="content_data">
+                <mt:setvarblock name="manage_content_data" append="1">
+                <div class="form-check col-auto">
+                        <input id="<mt:var name="id">" type="checkbox" onclick="togglePerms(this, '<mt:var name="children" replace=":","\\:">')" class="<mt:var name="id"> cb form-check-input" name="permission" value="<mt:var name="id">"<mt:if name="can_do">  checked="checked"</mt:if>>
+                        <label class="form-check-label" for="<mt:var name="id" escape="html">"><mt:var name="label" escape="html"></label>
+                </div>
+                </mt:setvarblock>
+
+            <mt:else>
+                <mt:setvarblock name="manage_content_field" append="1">
+                <div class="form-check mb-3 col-auto" style="">
+                        <input id="<mt:var name="id">" type="checkbox" onclick="togglePerms(this, '<mt:var name="children" replace=":","\\:">')" class="<mt:var name="id"> cb form-check-input" name="permission" value="<mt:var name="id">"<mt:if name="can_do">  checked="checked"</mt:if>>
+                        <label class="form-check-label" for="<mt:var name="id" escape="html">"><mt:var name="label" escape="html"></label>
+                </div>
+                </mt:setvarblock>
+            </mt:if>
+
+        </mt:if>
+        </mt:loop>
+
+
+        <mtapp:setting
+          id="ct-perm-group-<mt:var name="ct_perm_group_unique_id" escape="html">"
+          label_class="label-none">
+
+            <div class="mt-collapse ">
+                
+                <a class="btn btn-link" data-bs-toggle="collapse" href="#collapsePermissions_<mt:var name="ct_perm_group_unique_id" escape="html">" aria-expanded="false" aria-controls="collapsePermissions_<mt:var name="ct_perm_group_unique_id" escape="html">">
+                    <svg role="img" class="mt-icon--secondary"><title>Collapse</title><use xlink:href="<$mt:var name="static_uri"$>images/sprite.svg#ic_collapse"></use></svg>
+                    <mt:var name="ct_perm_group_label" escape="html">
+                </a>
+
+                <div class="collapse" id="collapsePermissions_<mt:var name="ct_perm_group_unique_id" escape="html">">
+                    <div class="mb-3 manage_all_content_data ms-3 mb-3 row ps-4">
+                        <mt:var name="all">
+                    </div>
+
+                    <div class="mb-3 manage_content_data d-flex flex-wrap ms-3 mb-3 row ps-4">
+                        <mt:var name="manage_content_data">
+                    </div>
+
+                    <hr class="manage_content_data_bottom">
+                    <h4 class="ms-5"><__trans phrase="Content Field Privileges"></h4>
+
+                    <div class="mb-3 ms-3 mb-3">
+                        <div class="row ms-2 mb-2">
+                        <div class="col-auto"><a href="#" class="check_all_content_field"><__trans phrase="Check All"></a></div>
+                        <div class="col-auto"><a href="#" class="uncheck_all_content_field"><__trans phrase="Uncheck All"></a></div>
+                        </div>
+                        <div class="manage_content_field d-flex flex-wrap row ms-3 ps-3">
+                        <mt:var name="manage_content_field">
+                        </div>
+                    </div>
+                </div>
+          </div>
+        </mtapp:setting>
+    </mt:loop>

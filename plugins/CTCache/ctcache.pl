@@ -7,14 +7,21 @@ use MT::Plugin;
 @MT::Plugin::CTCache::ISA = qw(MT::Plugin);
 
 my $PLUGIN_NAME = 'CTCache';
-my $VERSION = '0.2';
+my $VERSION = '0.3';
 my $plugin = new MT::Plugin::CTCache({
     name => $PLUGIN_NAME,
     version => $VERSION,
     description => 'This plugin caches some internal data of Movable Type that is repeated referrenced.',
     author_name => 'M-Logic, Inc.',
     author_link => 'http://m-logic.co.jp/',
-
+    registry => {
+        callbacks => {
+            'template_param.edit_role' => {
+                handler  => \&hdlr_tmpl_param_edit_role,
+                priority => 10,
+            },
+        },
+    },
 });
 
 use MT::ContentType;
@@ -105,6 +112,38 @@ sub instance { $plugin; }
         $r->{__stash}{$key} = $hash if $key;
         $hash;
     }
+}
+
+sub hdlr_tmpl_param_edit_role {
+    my ($cb, $app, $param, $tmpl) = @_;
+
+    # 差し替え
+    my $tokens = $plugin->load_tmpl('modify_edit_role_ct.tmpl')->tokens;
+    my $dest_node = $tmpl->getElementById('role-content-type-privileges');
+    $dest_node->childNodes($tokens);
+
+    my %ct_permissions = ();
+    my @new_loaded_permissions;
+    foreach (@{$param->{loaded_permissions}}) {
+        if (exists $_->{content_type_unique_id}) {
+            my $unique_id = $_->{content_type_unique_id};
+            if ($_->{id} =~ m/^manage_content_data/) {
+                $_->{type} = 'manage';
+            } elsif ($_->{id} =~ m/^create|publish|edit_all|_contentdata:/) {
+                $_->{type} = 'content_data';
+            } else {
+                $_->{type} = 'content_field';
+            }
+            push @{ $ct_permissions{$unique_id} }, $_;
+        }
+        else {
+            push @new_loaded_permissions, $_;
+        }
+    }
+    foreach (@{$param->{content_type_perm_groups}}) {
+        $_->{ct_permissions} = $ct_permissions{$_->{ct_perm_group_unique_id}} || [];
+    }
+    $_->{ct_permissions} = \@new_loaded_permissions;
 }
 
 1;
