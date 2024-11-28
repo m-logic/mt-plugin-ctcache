@@ -143,7 +143,7 @@ sub hdlr_tmpl_param_edit_role {
     foreach (@{$param->{content_type_perm_groups}}) {
         $_->{ct_permissions} = $ct_permissions{$_->{ct_perm_group_unique_id}} || [];
     }
-    $_->{ct_permissions} = \@new_loaded_permissions;
+    $_->{loaded_permissions} = \@new_loaded_permissions;
 }
 
 1;
