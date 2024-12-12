@@ -2,42 +2,40 @@ package MT::Plugin::CTCache;
 
 use strict;
 use MT;
+use MT::ContentType;
+use MT::Permission;
 use MT::Plugin;
 
-@MT::Plugin::CTCache::ISA = qw(MT::Plugin);
+use base qw( MT::Plugin );
+
+use constant DEBUG => 0;
 
 my $PLUGIN_NAME = 'CTCache';
-my $VERSION = '0.3';
+my $VERSION = '0.31';
 my $plugin = new MT::Plugin::CTCache({
     name => $PLUGIN_NAME,
     version => $VERSION,
     description => 'This plugin caches some internal data of Movable Type that is repeated referrenced.',
     author_name => 'M-Logic, Inc.',
     author_link => 'http://m-logic.co.jp/',
-    registry => {
-        callbacks => {
-            'template_param.edit_role' => {
-                handler  => \&hdlr_tmpl_param_edit_role,
-                priority => 10,
-            },
-        },
-    },
 });
 
-use MT::ContentType;
-use MT::Permission;
-
-my $saved_permission_to_hash;
 my $saved_all_permissions;
+my $saved_permission_to_hash;
 
-if (MT->version_number >= 7) { # required MT7
-    unless($saved_all_permissions) {
-        require MT::ContentType;
-        no warnings 'once';
-        no warnings 'redefine';
-        $saved_all_permissions = \&MT::ContentType::all_permissions;
-        *MT::ContentType::all_permissions = \&new_all_permissions;
+if (MT->version_number >= 7.1) { # required MT7.1
+    ## 1: MT::ContentType::all_permissions
+    ##    version < 8.10
+    if (MT->version_number < 8.1) {
+        unless($saved_all_permissions) {
+            require MT::ContentType;
+            no warnings 'once';
+            no warnings 'redefine';
+            $saved_all_permissions = \&MT::ContentType::all_permissions;
+            *MT::ContentType::all_permissions = \&new_all_permissions;
+        }
     }
+    ## 2: Cache MT::Permission::to_hash
     unless($saved_permission_to_hash) {
         require MT::Permission;
         no warnings 'once';
@@ -45,8 +43,16 @@ if (MT->version_number >= 7) { # required MT7
         $saved_permission_to_hash = \&MT::Permission::to_hash;
         *MT::Permission::to_hash = \&new_permission_to_hash;
     }
+
+    ## 3: Improve edit_role screen.
+    MT->add_callback(
+        'template_param.edit_role', 10,
+        MT->component('core'),
+        \&hdlr_tmpl_param_edit_role
+    );
+
     MT->add_plugin($plugin);
-    if ($MT::DebugMode) {
+    if (DEBUG) {
         require MT::Util::Log;
         require Data::Dumper;
         MT::Util::Log->init();
@@ -55,25 +61,29 @@ if (MT->version_number >= 7) { # required MT7
 
 sub instance { $plugin; }
 
+## 1: MT::ContentType::all_permissions
+##    version < 8.10
 {
     my $_clear_all_permissions;
 
     sub new_all_permissions {
         my $class = shift;
 
+        my $r = MT::Request->instance;
+        my $key = '__ctcache_all_permissions_';
+        if (exists $r->{__stash}{$key} && !$_clear_all_permissions) {
+            MT::Util::Log->info('[all_permissions]:return cache ' . $key) if DEBUG;
+            return $r->{__stash}{$key};
+        }
+        MT::Util::Log->info('[new_all_permissions]:' . ($_clear_all_permissions ? 'clear cache' : 'no cache')) if DEBUG;
+
         my $driver = $class->driver;
         return {} unless $driver && $driver->table_exists($class);
 
-        if (exists $driver->{ct_permissions} && ref($driver->{ct_permissions}) eq 'HASH' && !$_clear_all_permissions) {
-            # MT::Util::Log->info('[new_all_permissions]:return cache') if $MT::DebugMode;
-            return $driver->{ct_permissions};
-        }
-        # MT::Util::Log->info('[new_all_permissions]:no cache') if $MT::DebugMode;
-
         require MT::ContentType;
         my @all_permissions;
-        my @content_types
-            = MT::ContentType::_eval_if_mssql_server_or_oracle( sub { @{ $class->load_all } } );
+        # required MT7.1
+        my @content_types = MT::ContentType::_eval_if_mssql_server_or_oracle( sub { @{ $class->load_all } } );
         for my $content_type (@content_types) {
             push( @all_permissions, $content_type->permissions )
                 if $content_type->blog;
@@ -84,12 +94,12 @@ sub instance { $plugin; }
         #    next unless exists $p->{inherit_from} && ref($p->{inherit_from}) eq 'ARRAY';
         #    $all_permission{$k}->{inherit_from} = [ sort {$a cmp $b} @{$all_permission{$k}->{inherit_from}} ];
         #}
-        $driver->{ct_permissions} = \%all_permission;
         $_clear_all_permissions = 0;
-        return \%all_permission;
+        return $r->{__stash}{$key} = \%all_permission;
     }
 }
 
+## 2: Cache MT::Permission::to_hash
 {
     require MT::Request;
     sub new_permission_to_hash {
@@ -97,9 +107,9 @@ sub instance { $plugin; }
         my $hash  = {};
 
         my $r = MT::Request->instance;
-        my $key = ref($perms) eq 'MT::Permission' && $perms->id() ? '__perm_hash_' . $perms->id() : '';
+        my $key = ref($perms) eq 'MT::Permission' && $perms->id() ? '__ctcache_perm_hash_' . $perms->id() : '';
         if ($key && exists $r->{__stash}{$key}) {
-            # MT::Util::Log->info('[to_hash]:found cache ' . $key) if $MT::DebugMode;
+            MT::Util::Log->info('[to_hash]:return cache ' . $key) if DEBUG;
             return $r->{__stash}{$key};
         }
         my $all_perms = MT::Permission->perms();
@@ -108,20 +118,24 @@ sub instance { $plugin; }
             $perm = 'can_' . $perm;
             $hash->{"permission.$perm"} = $perms->$perm();
         }
-        # MT::Util::Log->info('[to_hash]:create cache ' . $key) if $key;
+        MT::Util::Log->info('[to_hash]:create cache ' . $key) if DEBUG;
         $r->{__stash}{$key} = $hash if $key;
         $hash;
     }
 }
 
+## 3: Improve edit_role screen.
 sub hdlr_tmpl_param_edit_role {
     my ($cb, $app, $param, $tmpl) = @_;
 
-    # 差し替え
+    MT::Util::Log->info('[hdlr_tmpl_param_edit_role]') if DEBUG;
+
+    # replace template
     my $tokens = $plugin->load_tmpl('modify_edit_role_ct.tmpl')->tokens;
     my $dest_node = $tmpl->getElementById('role-content-type-privileges');
     $dest_node->childNodes($tokens);
 
+    # modify $param->{loaded_permissions}
     my %ct_permissions = ();
     my @new_loaded_permissions;
     foreach (@{$param->{loaded_permissions}}) {
@@ -143,7 +157,7 @@ sub hdlr_tmpl_param_edit_role {
     foreach (@{$param->{content_type_perm_groups}}) {
         $_->{ct_permissions} = $ct_permissions{$_->{ct_perm_group_unique_id}} || [];
     }
-    $_->{loaded_permissions} = \@new_loaded_permissions;
+    $param->{loaded_permissions} = \@new_loaded_permissions;
 }
 
 1;
