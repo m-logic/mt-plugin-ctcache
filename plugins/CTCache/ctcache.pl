@@ -11,21 +11,21 @@ use base qw( MT::Plugin );
 use constant DEBUG => 0;
 
 my $PLUGIN_NAME = 'CTCache';
-my $VERSION = '0.31';
+my $VERSION = '0.32';
 my $plugin = new MT::Plugin::CTCache({
     name => $PLUGIN_NAME,
     version => $VERSION,
     description => 'This plugin caches some internal data of Movable Type that is repeated referrenced.',
     author_name => 'M-Logic, Inc.',
-    author_link => 'http://m-logic.co.jp/',
+    author_link => 'https://m-logic.co.jp/',
 });
 
 my $saved_all_permissions;
 my $saved_permission_to_hash;
 
-if (MT->version_number >= 7.1) { # required MT7.1
+if (MT->version_number >= 7.1) { # required r.4502
     ## 1: MT::ContentType::all_permissions
-    ##    version < 8.10
+    ##    version < 8.1.0
     if (MT->version_number < 8.1) {
         unless($saved_all_permissions) {
             require MT::ContentType;
@@ -125,13 +125,15 @@ sub instance { $plugin; }
 }
 
 ## 3: Improve edit_role screen.
+##    version <= r.4701(7.4.1) modify_edit_role_ct_mt7
+##    version => r.4703(7.5)   modify_edit_role_ct
 sub hdlr_tmpl_param_edit_role {
     my ($cb, $app, $param, $tmpl) = @_;
 
-    MT::Util::Log->info('[hdlr_tmpl_param_edit_role]') if DEBUG;
+    my $tmpl_name = MT->version_number < 7.5 ? 'modify_edit_role_ct_mt7.tmpl' : 'modify_edit_role_ct.tmpl';
+    MT::Util::Log->info('[hdlr_tmpl_param_edit_role]:'.$tmpl_name) if DEBUG;
 
-    # replace template
-    my $tokens = $plugin->load_tmpl('modify_edit_role_ct.tmpl')->tokens;
+    my $tokens = $plugin->load_tmpl($tmpl_name)->tokens;
     my $dest_node = $tmpl->getElementById('role-content-type-privileges');
     $dest_node->childNodes($tokens);
 
