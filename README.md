@@ -4,7 +4,7 @@ This plugin caches some internal data of Movable Type that is repeated referrenc
 
 ## Requirements
 
-* Movable Type 7
+* Movable Type 7.1+
 * Movable Type 8
 
 ## Installation
